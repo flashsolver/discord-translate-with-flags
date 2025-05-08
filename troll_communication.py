@@ -1,8 +1,13 @@
 import discord
 from discord.ext import commands
 from googletrans import Translator, LANGUAGES
-import os
 import asyncio
+import os
+from dotenv import load_dotenv
+
+load_dotenv() # Loads variables from .env into environment
+
+BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
 
 
 # --- Configuration ---
