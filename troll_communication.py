@@ -40,21 +40,19 @@ FLAG_TO_LANGUAGE = {
     "🇮🇳": ["hi", "en"],  # Hindi, English (India)
     "🇮🇱": ["he"],  # Hebrew
     "🇬🇷": ["el"],  # Greek
-    # Add more flags and languages as needed
 }
 
 # --- Bot Setup ---
 intents = discord.Intents.default()
-intents.message_content = True  # Crucial for reading message content
-intents.reactions = True      # To receive reaction events
-intents.guilds = True         # To receive guild information (good practice)
+intents.message_content = True
+intents.reactions = True
+intents.guilds = True
 
-bot = commands.Bot(command_prefix="!", intents=intents) # You can change the prefix
+bot = commands.Bot(command_prefix="!", intents=intents)
 translator = Translator()
 
-# --- Helper Function to Check if Emoji is a Supported Flag ---
+# --- Helper Function ---
 def get_language_codes_from_emoji(emoji_char):
-    """Returns the list of language codes for a flag emoji, or None if not found."""
     return FLAG_TO_LANGUAGE.get(str(emoji_char))
 
 @bot.event
@@ -63,99 +61,61 @@ async def on_ready():
     print('------')
 
 @bot.event
-async def on_reaction_add(reaction, user):
-    # Ignore reactions from the bot itself
-    if user.bot:
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+    # Ignore reactions from the bot itself or if user_id is None
+    if not payload.user_id or payload.user_id == bot.user.id:
         return
 
-    print(f"--- Reaction Event Triggered ---")
-    print(f"User: {user.name} ({user.id})")
-    print(f"Emoji: {reaction.emoji}")
+    print(f"--- Raw Reaction Event Triggered ---")
+    print(f"User ID: {payload.user_id}, Emoji: {payload.emoji}, Msg ID: {payload.message_id}, Chan ID: {payload.channel_id}")
 
-    # Get the message object from the reaction
-    message = reaction.message
+    # Fetch necessary objects
+    try:
+        channel = await bot.fetch_channel(payload.channel_id)
+        if not isinstance(channel, discord.TextChannel) and not isinstance(channel, discord.Thread): # Check if it's a text-based channel
+             print(f"DEBUG: (Raw) Channel {payload.channel_id} is not a text channel or thread. Type: {type(channel)}")
+             return
 
-    # Initial check of the message object from the reaction
-    message_id_from_reaction = message.id if message else None
-    # Correctly access channel ID via message.channel.id
-    channel_id_from_reaction = message.channel.id if message and hasattr(message, 'channel') and message.channel else None
+        message = await channel.fetch_message(payload.message_id)
+        user = await bot.fetch_user(payload.user_id) # Fetch user object
 
-
-    print(f"Initial Message ID from reaction.message: {message_id_from_reaction}")
-    print(f"Initial Channel ID from reaction.message.channel: {channel_id_from_reaction}")
-    print(f"Initial message content present: {'Yes' if message and message.content else 'No (or message is None)'}")
-
-    # If the message object from reaction seems incomplete (lacks content) or is None, try fetching.
-    if not message or not message.content:
-        print(f"DEBUG: Message (ID: {message_id_from_reaction}) has no content or message object is None. Attempting fetch...")
-
-        if not message_id_from_reaction or not channel_id_from_reaction:
-            print(f"DEBUG: Critical information (message_id or channel_id) missing from reaction object. Cannot fetch. Message ID: {message_id_from_reaction}, Channel ID: {channel_id_from_reaction}")
+        if user.bot: # Check if the fetched user is a bot (after fetching)
+            # print(f"DEBUG: (Raw) Reaction from bot user {user.name}, ignoring.")
             return
 
-        try:
-            channel = bot.get_channel(channel_id_from_reaction)
-            if not channel:
-                print(f"DEBUG: Channel ID {channel_id_from_reaction} not in cache. Attempting to fetch channel itself.")
-                # Ensure bot.fetch_channel is available (it is on the bot client)
-                channel = await bot.fetch_channel(channel_id_from_reaction)
-                print(f"DEBUG: Successfully fetched channel: {channel.name} ({channel.id})")
-
-            if channel:
-                print(f"DEBUG: Channel '{channel.name}' (ID: {channel.id}) obtained. Attempting to fetch message ID: {message_id_from_reaction}")
-                fetched_message = await channel.fetch_message(message_id_from_reaction)
-                if fetched_message:
-                    message = fetched_message  # Replace original message object with the fetched one
-                    print(f"DEBUG: Successfully fetched message ID: {message.id}. Content present: {'Yes' if message.content else 'No'}")
-                else:
-                    # This case (fetch_message returning None without an exception) is unlikely but handled.
-                    print(f"DEBUG: Failed to fetch message ID: {message_id_from_reaction}. fetch_message returned None.")
-                    return
-            else:
-                # This would mean bot.get_channel and bot.fetch_channel failed.
-                print(f"DEBUG: Could not obtain channel object for ID: {channel_id_from_reaction} after cache check and fetch attempt.")
-                return
-
-        except discord.NotFound:
-            print(f"DEBUG: Message (ID: {message_id_from_reaction}) or Channel (ID: {channel_id_from_reaction}) not found (discord.NotFound). It might have been deleted.")
-            return
-        except discord.Forbidden:
-            print(f"DEBUG: Bot lacks permissions (discord.Forbidden) to fetch Channel (ID: {channel_id_from_reaction}) or Message (ID: {message_id_from_reaction}). CHECK PERMISSIONS (View Channel, Read Message History).")
-            return
-        except AttributeError as ae:
-            # This might occur if 'message' or 'message.channel' was None unexpectedly before IDs could be extracted.
-            print(f"DEBUG: AttributeError during fetch preparation (e.g., reaction.message or reaction.message.channel was None): {ae}")
-            return
-        except Exception as e:
-            print(f"DEBUG: An unexpected error occurred while fetching channel/message (Msg ID: {message_id_from_reaction}, Chan ID: {channel_id_from_reaction}): {e}")
-            return
-    else:
-        print(f"DEBUG: Message (ID: {message.id}) from reaction object has content immediately. No fetch needed.")
-
-    # Now, proceed with the rest of the logic using the (potentially fetched) message object
-    if not message: # Safeguard, should have been handled by fetch logic if message started as None
-        print("DEBUG: Message object is None even after fetch attempt. Cannot proceed.")
+    except discord.NotFound:
+        print(f"DEBUG: (Raw) Cannot find channel, message, or user. Channel: {payload.channel_id}, Msg: {payload.message_id}, User: {payload.user_id}. Might be a deleted message/channel or user not found.")
         return
+    except discord.Forbidden:
+        print(f"DEBUG: (Raw) Bot lacks permissions to fetch channel/message/user. Check View Channel, Read Message History. Channel: {payload.channel_id}, Msg: {payload.message_id}, User: {payload.user_id}")
+        return
+    except Exception as e:
+        print(f"DEBUG: (Raw) Error fetching objects: {e}. Channel: {payload.channel_id}, Msg: {payload.message_id}, User: {payload.user_id}")
+        return
+
+    # Now 'message', 'channel', and 'user' are the full objects
+    print(f"Successfully fetched: User: {user.name}, Channel: {channel.name}, Message ID: {message.id}")
+
+    emoji_reacted = str(payload.emoji) # payload.emoji is a PartialEmoji
 
     # Ensure message.content is available before proceeding to translation
-    if not message.content: # Checks for None or empty string
-        print(f"Message content is empty for ID {message.id} after potential fetch. Bot will not translate.")
+    if not message.content:
+        print(f"Message content is empty for ID {message.id} (fetched via raw event). Bot will not translate.")
         try:
-            await message.channel.send(
+            await channel.send(
                 f"Sorry {user.mention}, I can't translate an empty message or a message with only an embed/image. (Debug: Content was empty for message ID {message.id})",
                 delete_after=10
             )
         except discord.Forbidden:
-            print(f"Error: Bot doesn't have permission to send messages in {message.channel.name} (Channel ID: {message.channel.id})")
-        except Exception as e:
-            print(f"Error sending 'empty content' notification for message ID {message.id}: {e}")
+            print(f"Error: Bot doesn't have permission to send messages in {channel.name}")
+        except Exception as e_send:
+            print(f"Error sending 'empty content' notification for message ID {message.id}: {e_send}")
         return
 
+    # --- Translation Logic (largely same as before) ---
     print(f"Message ID being processed: {message.id}")
-    print(f"Message Author: {message.author.name if message.author else 'Unknown author'}")
+    print(f"Message Author: {message.author.name}") # message.author should be populated
     print(f"Message Created At: {message.created_at}")
-
-    emoji_reacted = str(reaction.emoji)
     print(f"Emoji Reacted (str): {emoji_reacted}")
 
     target_lang_codes = get_language_codes_from_emoji(emoji_reacted)
@@ -166,17 +126,17 @@ async def on_reaction_add(reaction, user):
         original_text = message.content
         translations_output = []
         source_language_name = ""
-        print(f"Attempting translation for: '{original_text[:100]}...' for message ID {message.id}") # Log snippet
+        print(f"Attempting translation for: '{original_text[:100]}...' for message ID {message.id}")
 
         try:
             detected_source = None
             try:
-                detection_sample = original_text[:1000] # googletrans has a limit for detection
+                detection_sample = original_text[:1000]
                 detected_source = translator.detect(detection_sample)
                 if detected_source and hasattr(detected_source, 'lang') and detected_source.lang in LANGUAGES:
                     source_language_name = f" (from {LANGUAGES[detected_source.lang].capitalize()})"
                 else:
-                    detected_source = None # Ensure it's None if detection fails or lang not in LANGUAGES
+                    detected_source = None
             except Exception as detect_error:
                 print(f"Could not detect source language for message ID {message.id}: {detect_error}")
 
@@ -185,14 +145,12 @@ async def on_reaction_add(reaction, user):
                     translations_output.append(f"**{LANGUAGES.get(lang_code, lang_code).capitalize()}:** (Already in this language)")
                     continue
                 try:
-                    # Run blocking translation in a separate thread
                     translated_obj = await asyncio.to_thread(translator.translate, original_text, dest=lang_code)
                     if translated_obj and hasattr(translated_obj, 'text') and translated_obj.text:
-                        # Check if translation is meaningfully different from original
                         if translated_obj.text.strip().lower() != original_text.strip().lower():
                             translations_output.append(f"**{LANGUAGES.get(lang_code, lang_code).capitalize()}:** {translated_obj.text}")
                         else:
-                            translations_output.append(f"**{LANGUAGES.get(lang_code, lang_code).capitalize()}:** (Content seems to be already in or very similar to target language)")
+                             translations_output.append(f"**{LANGUAGES.get(lang_code, lang_code).capitalize()}:** (Content seems to be already in or very similar to target language)")
                     else:
                         translations_output.append(f"**{LANGUAGES.get(lang_code, lang_code).capitalize()}:** (Translation returned no text)")
                 except Exception as e:
@@ -210,38 +168,37 @@ async def on_reaction_add(reaction, user):
                 try:
                     await message.reply(response_message, mention_author=False)
                 except discord.Forbidden:
-                    print(f"Error: Bot doesn't have permission to reply or send messages in {message.channel.name} for message ID {message.id}")
+                    print(f"Error: Bot doesn't have permission to reply or send messages in {channel.name} for message ID {message.id}")
                 except discord.HTTPException as http_e:
-                    # Check for specific "cannot reply without permission to read message history"
-                    if http_e.status == 400 and http_e.code == 50083: # 50083: Cannot reply without permission to read message history
-                        print(f"Error: Cannot reply in {message.channel.name} (Msg ID: {message.id}). Missing 'Read Message History' or trying to reply to a system message. Trying to send a normal message instead.")
+                    if http_e.status == 400 and http_e.code == 50083: # Cannot reply without read message history
+                        print(f"Error: Cannot reply in {channel.name} (Msg ID: {message.id}). Missing 'Read Message History' or replying to system message. Sending to channel.")
                         try:
-                            await message.channel.send(response_message)
+                            await channel.send(response_message)
                         except discord.Forbidden:
-                            print(f"Error: Bot doesn't have permission to send messages in {message.channel.name} either for message ID {message.id}.")
-                        except Exception as e_send:
-                            print(f"Error sending normal message for {message.id}: {e_send}")
+                            print(f"Error: Bot also lacks permission to send messages in {channel.name} for message ID {message.id}.")
+                        except Exception as e_send_norm:
+                            print(f"Error sending normal message for {message.id}: {e_send_norm}")
                     else:
                         print(f"Discord HTTP Error sending translation for message ID {message.id}: {http_e} (Status: {http_e.status}, Code: {http_e.code}, Text: {http_e.text})")
-                except Exception as e_reply:
-                    print(f"Unexpected error during message.reply for {message.id}: {e_reply}")
+                except Exception as e_reply_gen:
+                    print(f"Unexpected error during message.reply for {message.id}: {e_reply_gen}")
             else:
                 print(f"No valid translations generated for message ID {message.id}.")
 
         except Exception as general_e:
             print(f"An unexpected error occurred during translation processing for message ID {message.id}: {general_e}")
             try:
-                await message.channel.send(
+                await channel.send(
                     f"Sorry {user.mention}, an unexpected error occurred while trying to translate message ID {message.id}.",
                     delete_after=10
                 )
             except discord.Forbidden:
-                print(f"Error: Bot doesn't have permission to send error messages in {message.channel.name} for message ID {message.id}")
-            except Exception as e_send_err:
-                print(f"Error sending 'unexpected error' notification for {message.id}: {e_send_err}")
+                print(f"Error: Bot doesn't have permission to send error messages in {channel.name} for message ID {message.id}")
+            except Exception as e_send_err_gen:
+                print(f"Error sending 'unexpected error' notification for {message.id}: {e_send_err_gen}")
     else:
         print(f"No target language found for emoji: {emoji_reacted} on message ID {message.id}")
-    print(f"--- End of Reaction Event for message ID {message.id} ---")
+    print(f"--- End of Raw Reaction Event for message ID {message.id} ---")
 
 
 # --- Basic Ping Command (Optional) ---
@@ -254,14 +211,13 @@ async def ping(ctx):
 if __name__ == "__main__":
     if BOT_TOKEN:
         try:
-            print("Starting bot...")
+            print("Starting bot with on_raw_reaction_add handler...")
             bot.run(BOT_TOKEN)
         except discord.LoginFailure:
             print("Login Failure: Make sure your bot token is correct and you have enabled necessary intents in the Discord Developer Portal.")
         except discord.PrivilegedIntentsRequired:
-            print("Privileged Intents Required: Please ensure you have enabled 'Message Content Intent' and potentially 'Server Members Intent' in your bot's application page on the Discord Developer Portal.")
+            print("Privileged Intents Required: Please ensure you have enabled 'Message Content Intent' (and 'Server Members Intent' if needed for other features) in your bot's application page on the Discord Developer Portal.")
         except Exception as e:
             print(f"An error occurred while trying to run the bot: {e}")
     else:
-        # This case is already handled at the top, but as a fallback.
         print("Bot token not found. Please set the DISCORD_BOT_TOKEN environment variable in your .env file.")
