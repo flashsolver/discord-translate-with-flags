@@ -3,10 +3,10 @@ from discord.ext import commands
 from googletrans import Translator, LANGUAGES # googletrans==4.0.0rc1 recommended
 import asyncio
 import os
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
+#load_dotenv()
 
 # --- Configuration ---
 BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
