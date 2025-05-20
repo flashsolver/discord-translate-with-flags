@@ -25,6 +25,7 @@ FLAG_TO_LANGUAGE = {
     "🇩🇪": ["de"], "🇦🇹": ["de"], "🇨🇭": ["de", "fr", "it"],  # German, Swiss French, Swiss Italian
     "🇮🇹": ["it"],
     "🇯🇵": ["ja"],
+    "🇯🇵": ["ja"],
     "🇰🇷": ["ko"],
     "🇨🇳": ["zh-CN"],  # Adjusted for deep-translator (often specific with region)
     "🇷🇺": ["ru"],
@@ -39,8 +40,8 @@ FLAG_TO_LANGUAGE = {
     "🇹🇷": ["tr"],
     "🇸🇦": ["ar"], "🇦🇪": ["ar"], "🇪🇬": ["ar"],  # Arabic
     "🇮🇳": ["hi", "en"],  # Hindi, English (India)
-    "🇮🇱": ["he"],  # Hebrew
     "🇬🇷": ["el"],  # Greek
+    "🇻🇳": ["vi"],  # Vietnamese
 }
 
 # --- Simple map for language codes to names (replace/extend as needed) ---
