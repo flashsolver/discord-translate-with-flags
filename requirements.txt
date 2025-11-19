@@ -1,3 +1,4 @@
-discord.py>=2.3.0    # Or latest stable version of discord.py
-deep-translator>=1.9.0 # Or latest stable version
-python-dotenv>=0.20.0  # Or latest stable version
+discord.py>=2.3.0
+deep-translator>=1.9.0
+python-dotenv>=0.20.0
+langdetect>=1.0.9
